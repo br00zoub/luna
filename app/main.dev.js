@@ -212,6 +212,23 @@ app.on('ready', async () => {
     y = externalDisplay.bounds.y + 50;
   }
 
+  // loading screen
+  const splashScreen = new BrowserWindow({
+    minWidth: 100,
+    minHeight: 100,
+    x: screen.getPrimaryDisplay().size / 2,
+    y: screen.getPrimaryDisplay().size / 2,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false
+    },
+    resizable: false,
+    icon: path.join(__dirname, 'resources/icon.ico')
+  });
+
+  splashScreen.loadURL(`file://${__dirname}/splash.html`);
+  splashScreen.show();
+
   // create mainWindow
   mainWindow = new BrowserWindow({
     minWidth: MIN_WIDTH || screenSize.width,
@@ -230,6 +247,7 @@ app.on('ready', async () => {
 
   mainWindow.once('ready-to-show', event => {
     log.info(chalk.white.bgBlue.bold('[EVENT]'), 'ready-to-show event fired');
+    splashScreen.show();
   });
 
   mainWindow.webContents.on('did-finish-load', async event => {
@@ -238,6 +256,8 @@ app.on('ready', async () => {
     if (!mainWindow) {
       throw new Error('mainWindow is not defined');
     }
+
+    splashScreen.hide();
 
     if (START_MINIMIZED) {
       mainWindow.minimize();
