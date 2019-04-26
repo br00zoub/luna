@@ -177,6 +177,144 @@ const installPackageEpic = action$ =>
     })
   );
 
+const installMultiplePackagesFromGlobalEpic = (action$, state$) =>
+  action$.pipe(
+    ofType(installMultiplePackages.type),
+    withLatestFromState(),
+    filter(
+      ([
+        ,
+        {
+          common: {
+            mode,
+            directory,
+            operations: { packagesInstallOptions }
+          }
+        }
+      ]) => mode === 'global'
+    ),
+    map(([, { common: { directory } }]) =>
+      trasformPackagesData({
+        from: 'global',
+        options: []
+      })
+    )
+  );
+
+const installMultiplePackagesFromJsonEpic = (action$, state$) =>
+  action$.pipe(
+    ofType(installMultiplePackages.type),
+    withLatestFromState(),
+    filter(
+      ([
+        ,
+        {
+          common: {
+            mode,
+            directory,
+            operations: { packagesInstallOptions }
+          }
+        }
+      ]) =>
+        mode !== 'global' &&
+        (!packagesInstallOptions || !packagesInstallOptions.length)
+    ),
+    map(([, { common: { directory } }]) => {
+      const packagesFromPackageJson = readPackageJson(directory);
+      // todo: operator
+      const packagesInstallOptionsFromJson = packagesFromPackageJson
+        ? objectEntries(
+            pick(
+              ['dependencies', 'devDependencies', 'optionalDependencies'],
+              packagesFromPackageJson
+            )
+          )
+        : [];
+      return trasformPackagesData({
+        from: 'json',
+        options: packagesInstallOptionsFromJson
+      });
+    })
+  );
+
+const installMultiplePackagesTransformEpic = (action$, state$) =>
+  action$.pipe(
+    ofType(trasformPackagesData.type),
+    switchMap(({ from, options }) => {
+      const {
+        ui: { selected }
+      } = state$.value;
+
+      return of(
+        selected.map(selectedPackage => {
+          let details;
+
+          if (from === 'json') {
+            details = options.filter(option => {
+              /* eslint-disable-next-line */
+              const [groupName, dependencies] = option;
+
+              return dependencies[selectedPackage];
+            });
+
+            /* eslint-disable-next-line */
+            const [group, packages] = details[0];
+
+            return {
+              type: 'ADD_OPTIONS',
+              name: selectedPackage,
+              options: group ? [].concat(PACKAGE_GROUPS[group]) : []
+            };
+          }
+
+          if (from === 'flags') {
+            return {
+              type: 'ADD_OPTIONS',
+              name: selectedPackage,
+              options: options
+                ? options.find(option => option.name === selectedPackage)
+                    .options
+                : []
+            };
+          }
+
+          return {
+            type: 'ADD_OPTIONS',
+            name: selectedPackage,
+            options: []
+          };
+        })
+      );
+    }),
+    map(commandOptions => {
+      // make epic
+      const {
+        ui: { selected },
+        common: { mode, directory }
+      } = state$.value;
+
+      const options = commandOptions.map(opt => opt.options);
+      const mergedOptions = [].concat(options);
+
+      const parameters = {
+        ipcEvent: 'install',
+        cmd: options.map(() => 'install'),
+        packages: selected,
+        pkgOptions: mergedOptions,
+        multiple: true,
+        mode,
+        directory
+      };
+
+      ipcRenderer.send(IPC_EVENT, parameters);
+
+      return updateLoader({
+        loading: true,
+        message: MESSAGES.install
+      });
+    })
+  );
+
 const installMultiplePackagesEpic = (action$, state$) =>
   action$.pipe(
     ofType(installMultiplePackages.type),

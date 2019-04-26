@@ -20,18 +20,20 @@ const runCommand = (options, callback) => {
 
   // an array of Promises
   const combine = () =>
-    cmd.map((command, idx) => {
-      try {
-        const runner = manager[command];
-        const result = runner(rest, callback, idx);
+    merge(
+      ...cmd.map((command, idx) => {
+        try {
+          const runner = manager[command];
+          const result = runner(rest, callback, idx);
+          // const result = from(runner(rest, callback, idx));
+          return result;
+        } catch (error) {
+          mk.log(error);
 
-        return result;
-      } catch (error) {
-        mk.log(error);
-
-        throw new Error(error);
-      }
-    });
+          throw new Error(error);
+        }
+      })
+    );
 
   Promise.all(combine())
     .then(results =>
